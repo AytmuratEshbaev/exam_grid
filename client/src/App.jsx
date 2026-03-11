@@ -1,0 +1,47 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './context/AuthContext';
+
+// Public Pages
+// import HomePage from './pages/HomePage';
+
+// Admin Pages
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminLayout from './components/admin/Layout/AdminLayout';
+
+import Classes from './components/admin/Classes/Classes';
+import Rooms from './components/admin/Rooms/Rooms';
+import Exams from './components/admin/Exams/Exams';
+import Admins from './components/admin/Admins/Admins';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Toaster position="top-right" />
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<div className="p-8 text-center text-2xl font-bold">Home Page (Tez orada)</div>} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="classes" element={<Classes />} />
+            <Route path="rooms" element={<Rooms />} />
+            <Route path="exams" element={<Exams />} />
+            <Route path="users" element={<Admins />} />
+            <Route path="assignments/:examId" element={<div className="p-4 text-center">Taqsimlash jarayoni tez orada qo'shiladi</div>} />
+          </Route>
+          
+          {/* 404 Not Found */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+export default App;
