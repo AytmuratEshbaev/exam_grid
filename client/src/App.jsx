@@ -3,7 +3,8 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 
 // Public Pages
-// import HomePage from './pages/HomePage';
+import HomePage from './pages/HomePage';
+import PublicExamDetails from './pages/PublicExamDetails';
 
 // Admin Pages
 import AdminLogin from './pages/AdminLogin';
@@ -15,6 +16,11 @@ import Rooms from './components/admin/Rooms/Rooms';
 import Exams from './components/admin/Exams/Exams';
 import Admins from './components/admin/Admins/Admins';
 
+// Invigilator Pages
+import InvigilatorLayout from './components/invigilator/Layout/InvigilatorLayout';
+import InvigilatorDashboard from './pages/InvigilatorDashboard';
+import InvigilatorExamDetails from './pages/InvigilatorExamDetails';
+
 function App() {
   return (
     <BrowserRouter>
@@ -22,10 +28,11 @@ function App() {
         <Toaster position="top-right" />
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<div className="p-8 text-center text-2xl font-bold">Home Page (Tez orada)</div>} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/exam/:id" element={<PublicExamDetails />} />
           
           {/* Admin Routes */}
-          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/login" element={<AdminLogin />} />
           
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
@@ -33,9 +40,15 @@ function App() {
             <Route path="rooms" element={<Rooms />} />
             <Route path="exams" element={<Exams />} />
             <Route path="users" element={<Admins />} />
-            <Route path="assignments/:examId" element={<div className="p-4 text-center">Taqsimlash jarayoni tez orada qo'shiladi</div>} />
+            <Route path="assignments/:examId" element={<div className="p-4 text-center">Assignment details coming soon</div>} />
           </Route>
           
+          {/* Invigilator Routes */}
+          <Route path="/invigilator" element={<InvigilatorLayout />}>
+            <Route index element={<InvigilatorDashboard />} />
+            <Route path="exam/:examId" element={<InvigilatorExamDetails />} />
+          </Route>
+
           {/* 404 Not Found */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

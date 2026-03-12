@@ -27,11 +27,11 @@ exports.getStudents = async (req, res) => {
 
 // Create a student
 exports.createStudent = async (req, res) => {
-  const { full_name, class_id, student_code, is_active } = req.body;
+  const { full_name, class_id, student_code, student_id, is_active } = req.body;
   try {
     const result = await db.query(
-      'INSERT INTO students (full_name, class_id, student_code, is_active) VALUES ($1, $2, $3, $4) RETURNING *',
-      [full_name, class_id, student_code, is_active !== undefined ? is_active : true]
+      'INSERT INTO students (full_name, class_id, student_code, student_id, is_active) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [full_name, class_id, student_code, student_id || null, is_active !== undefined ? is_active : true]
     );
     
     // Update class student count
@@ -192,7 +192,99 @@ exports.bulkTransfer = async (req, res) => {
     await db.query('UPDATE classes SET student_count = (SELECT COUNT(*) FROM students WHERE class_id = $1 AND is_active = true) WHERE id = $1', [target_class_id]);
     
     await db.query('COMMIT');
-    res.json({ message: `${student_ids.length} ta o'quvchi ko'chirildi` });
+    res.json({ message: `${student_ids.length} students transferred successfully` });
+  } catch (err) {
+    await db.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Temporary: Import student IDs from Excel (maps login -> student_id)
+exports.importStudentIds = async (req, res) => {
+  const entries = req.body.entries; // array of { student_code, student_id }
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ message: 'Invalid data: expected array of { student_code, student_id }' });
+  }
+
+  try {
+    await db.query('BEGIN');
+    
+    let updated = 0;
+    let notFound = 0;
+    const notFoundList = [];
+
+    for (const entry of entries) {
+      if (!entry.student_code || !entry.student_id) continue;
+
+      const code = entry.student_code.toString().trim();
+      const sid = entry.student_id.toString().trim();
+
+      const result = await db.query(
+        'UPDATE students SET student_id = $1 WHERE student_code = $2',
+        [sid, code]
+      );
+
+      if (result.rowCount > 0) {
+        updated++;
+      } else {
+        notFound++;
+        notFoundList.push(code);
+      }
+    }
+
+    await db.query('COMMIT');
+    res.json({ 
+      message: `Successfully updated ${updated} student IDs`, 
+      updated, 
+      notFound,
+      notFoundList: notFoundList.slice(0, 20) // Show first 20 not found
+    });
+  } catch (err) {
+    await db.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update student logins (student_code) by matching on student_id
+exports.updateLogins = async (req, res) => {
+  const entries = req.body.entries; // array of { student_id, student_code }
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ message: 'Invalid data: expected array of { student_id, student_code }' });
+  }
+
+  try {
+    await db.query('BEGIN');
+    
+    let updated = 0;
+    let notFound = 0;
+    const notFoundList = [];
+
+    for (const entry of entries) {
+      if (!entry.student_id || !entry.student_code) continue;
+
+      const sid = entry.student_id.toString().trim();
+      const newCode = entry.student_code.toString().trim();
+
+      const result = await db.query(
+        'UPDATE students SET student_code = $1 WHERE student_id = $2',
+        [newCode, sid]
+      );
+
+      if (result.rowCount > 0) {
+        updated++;
+      } else {
+        notFound++;
+        notFoundList.push(sid);
+      }
+    }
+
+    await db.query('COMMIT');
+    res.json({ 
+      message: `Successfully updated ${updated} logins`, 
+      updated, 
+      notFound,
+      notFoundList: notFoundList.slice(0, 20)
+    });
   } catch (err) {
     await db.query('ROLLBACK');
     res.status(500).json({ error: err.message });

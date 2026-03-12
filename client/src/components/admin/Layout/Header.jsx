@@ -12,7 +12,7 @@ const Header = ({ toggleSidebar }) => {
           <Menu className="w-5 h-5" />
         </button>
         <div className="ml-4 lg:ml-0 text-slate-800 font-bold text-sm">
-          Boshqaruv Paneli
+          Admin Panel
         </div>
       </div>
     </header>

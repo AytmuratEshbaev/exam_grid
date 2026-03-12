@@ -31,8 +31,9 @@ api.interceptors.response.use(
       // Token is invalid/expired
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin/login') {
-        window.location.href = '/admin/login';
+      const path = window.location.pathname;
+      if ((path.startsWith('/admin') || path.startsWith('/invigilator')) && path !== '/login') {
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

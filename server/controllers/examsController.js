@@ -4,6 +4,14 @@ const { generateAssignments } = require('../services/assignmentEngine');
 // Get all exams
 exports.getExams = async (req, res) => {
   try {
+    let whereClause = "";
+    if (req.user && req.user.role === 'invigilator') {
+      whereClause = `
+        WHERE (e.exam_date + e.exam_time) >= (CURRENT_TIMESTAMP - INTERVAL '7 days') 
+          AND (e.exam_date + e.exam_time) <= (CURRENT_TIMESTAMP + INTERVAL '7 days')
+      `;
+    }
+
     const result = await db.query(`
       SELECT e.*, 
         string_agg(DISTINCT (c.grade_level || '-' || c.name), ', ') as class_names,
@@ -15,6 +23,7 @@ exports.getExams = async (req, res) => {
       LEFT JOIN classes c ON ec.class_id = c.id 
       LEFT JOIN exam_rooms er ON e.id = er.exam_id
       LEFT JOIN rooms r ON er.room_id = r.id
+      ${whereClause}
       GROUP BY e.id
       ORDER BY e.exam_date DESC, e.exam_time DESC
     `);
@@ -61,11 +70,11 @@ exports.createExam = async (req, res) => {
 
     if (studentsRes.rows.length === 0) {
       await db.query('ROLLBACK');
-      return res.status(400).json({ error: "Tanlangan sinflarda faol o'quvchilar topilmadi. Imtihon yaratib bo'lmaydi." });
+      return res.status(400).json({ error: "No active students found in the selected classes. Cannot create exam." });
     }
     if (roomsRes.rows.length === 0) {
       await db.query('ROLLBACK');
-      return res.status(400).json({ error: "Xonalar tanlanmagan. Imtihon yaratib bo'lmaydi." });
+      return res.status(400).json({ error: "No rooms selected. Cannot create exam." });
     }
 
     // This will throw if capacity insufficient

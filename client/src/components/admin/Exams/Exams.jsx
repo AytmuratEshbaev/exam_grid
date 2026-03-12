@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
 import { Trash2, Plus, Calendar, Settings, CheckSquare, Clock, Users, DoorOpen, List, ChevronDown, CheckCircle2, Shuffle, RotateCcw, ArrowLeft, X } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 
 const Exams = () => {
+  const { user } = useAuth();
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -19,6 +21,20 @@ const Exams = () => {
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
 
+  const getExamStatus = (exam) => {
+    if (!exam) return "Upcoming";
+    const now = new Date();
+    const examDate = new Date(exam.exam_date);
+    if (exam.exam_time || exam.start_time) {
+      const timeStr = exam.exam_time || exam.start_time;
+      const [hours, minutes] = timeStr.split(':');
+      examDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+    } else {
+      examDate.setHours(23, 59, 59, 999);
+    }
+    return now > examDate ? "Completed" : "Upcoming";
+  };
+
   useEffect(() => {
     fetchClasses();
     fetchRooms();
@@ -31,16 +47,16 @@ const Exams = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.class_ids.length === 0) { toast.error("Kamida 1 ta sinfni tanlang", { icon: '⚠️' }); setActiveTab('classes'); return; }
-    if (form.room_ids.length === 0) { toast.error('Kamida 1 ta xonani belgilang', { icon: '🚪' }); setActiveTab('rooms'); return; }
+    if (form.class_ids.length === 0) { toast.error("Select at least 1 class", { icon: '⚠️' }); setActiveTab('classes'); return; }
+    if (form.room_ids.length === 0) { toast.error('Select at least 1 room', { icon: '🚪' }); setActiveTab('rooms'); return; }
     try {
-      if (form.id) { await api.put(`/admin/exams/${form.id}`, form); toast.success(`"${form.name}" yangilandi`, { icon: '✨' }); }
+      if (form.id) { await api.put(`/admin/exams/${form.id}`, form); toast.success(`"${form.name}" updated`, { icon: '✨' }); }
       else {
         const res = await api.post('/admin/exams', form);
-        toast.success(`Imtihon yaratildi va ${res.data.assignment?.total_assigned || 0} ta o'quvchi taqsimlandi!`, { icon: '🎯', duration: 5000 });
+        toast.success(`Exam created and ${res.data.assignment?.total_assigned || 0} students assigned!`, { icon: '🎯', duration: 5000 });
       }
       fetchExams(); resetForm();
-    } catch (err) { toast.error(err.response?.data?.error || 'Xatolik yuz berdi', { duration: 6000 }); }
+    } catch (err) { toast.error(err.response?.data?.error || 'An error occurred', { duration: 6000 }); }
   };
 
   const resetForm = () => {
@@ -49,9 +65,9 @@ const Exams = () => {
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`"${name}" imtihonini o'chirmoqchimisiz?`)) return;
-    try { await api.delete(`/admin/exams/${id}`); toast.success("Imtihon o'chirildi"); fetchExams(); if(form.id === id) resetForm(); if(selectedExamId === id) closeAssignmentPanel(); }
-    catch { toast.error("O'chirishda xatolik"); }
+    if (!window.confirm(`Are you sure you want to delete exam "${name}"?`)) return;
+    try { await api.delete(`/admin/exams/${id}`); toast.success("Exam deleted"); fetchExams(); if(form.id === id) resetForm(); if(selectedExamId === id) closeAssignmentPanel(); }
+    catch { toast.error("Error deleting exam"); }
   };
 
   const toggleClass = (classId) => setForm(prev => ({...prev, class_ids: prev.class_ids.includes(classId) ? prev.class_ids.filter(id => id !== classId) : [...prev.class_ids, classId]}));
@@ -78,23 +94,23 @@ const Exams = () => {
     setIsAssigning(true);
     try {
       const res = await api.post(`/admin/assignments/generate/${selectedExamId}`);
-      toast.success(res.data.message + ` (${res.data.total_assigned} ta)`, { icon: '🎯', duration: 4000 });
+      toast.success(res.data.message + ` (${res.data.total_assigned})`, { icon: '🎯', duration: 4000 });
       openAssignmentPanel(selectedExamId);
       fetchExams();
     } catch (err) {
-      toast.error(err.response?.data?.error || "Taqsimlashda xatolik", { duration: 5000 });
+      toast.error(err.response?.data?.error || "Error during assignment", { duration: 5000 });
     } finally { setIsAssigning(false); }
   };
 
   const handleReset = async () => {
     if (!selectedExamId) return;
-    if (!window.confirm("Barcha taqsimotni bekor qilmoqchimisiz?")) return;
+    if (!window.confirm("Are you sure you want to reset all assignments?")) return;
     try {
       await api.delete(`/admin/assignments/${selectedExamId}/reset`);
-      toast.success("Taqsimot bekor qilindi");
+      toast.success("Assignments reset");
       setAssignments([]);
       fetchExams();
-    } catch { toast.error("Xatolik"); }
+    } catch { toast.error("Error"); }
   };
 
   // Group assignments by room
@@ -120,40 +136,42 @@ const Exams = () => {
             <div>
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{selectedExam.name}</h1>
               <p className="text-slate-500 mt-0.5 text-sm font-medium">
-                {new Date(selectedExam.exam_date).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'long', year: 'numeric' })} • Soat {selectedExam.exam_time?.slice(0, 5)} • {selectedExam.quarter}-chorak
+                {new Date(selectedExam.exam_date).toLocaleDateString('en-US')} • Time {selectedExam.exam_time?.slice(0, 5) || selectedExam.start_time?.slice(0, 5)} • Quarter {selectedExam.quarter}
               </p>
             </div>
           </div>
           <div className="flex gap-2">
-            {assignments.length > 0 && (
+            {user?.role === 'superadmin' && assignments.length > 0 && (
               <button onClick={handleReset} className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-sm rounded-xl transition-colors flex items-center gap-2">
-                <RotateCcw className="w-4 h-4" /> Bekor qilish
+                <RotateCcw className="w-4 h-4" /> Reset
               </button>
             )}
-            <button onClick={handleGenerate} disabled={isAssigning} className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2">
-              <Shuffle className="w-4 h-4" /> {isAssigning ? 'Taqsimlanmoqda...' : assignments.length > 0 ? 'Qayta taqsimlash' : 'Taqsimlash'}
-            </button>
+            {user?.role === 'superadmin' && (
+              <button onClick={handleGenerate} disabled={isAssigning} className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2">
+                <Shuffle className="w-4 h-4" /> {isAssigning ? 'Assigning...' : assignments.length > 0 ? 'Re-assign' : 'Assign'}
+              </button>
+            )}
           </div>
         </div>
 
         {/* INFO CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sinflar</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Classes</p>
             <p className="text-lg font-black text-slate-900 mt-1">{selectedExam.class_names || '-'}</p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Xonalar</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Rooms</p>
             <p className="text-lg font-black text-slate-900 mt-1">{selectedExam.room_names || '-'}</p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">O'quvchilar</p>
-            <p className="text-lg font-black text-indigo-600 mt-1">{assignments.length} ta</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Students</p>
+            <p className="text-lg font-black text-indigo-600 mt-1">{assignments.length}</p>
           </div>
           <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Holat</p>
-            <span className={`inline-flex items-center px-2.5 py-1 mt-1 text-xs font-extrabold rounded-lg ${selectedExam.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : selectedExam.status === 'done' ? 'bg-slate-50 text-slate-600 border border-slate-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-              {selectedExam.status === 'active' ? 'Taqsimlangan ✓' : selectedExam.status === 'done' ? 'Tugagan' : 'Kutilmoqda'}
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status</p>
+            <span className={`inline-flex items-center px-2.5 py-1 mt-1 text-xs font-extrabold rounded-lg ${getExamStatus(selectedExam) === 'Upcoming' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
+              {getExamStatus(selectedExam)}
             </span>
           </div>
         </div>
@@ -168,13 +186,17 @@ const Exams = () => {
             <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
               <Shuffle className="w-10 h-10 text-emerald-400" />
             </div>
-            <h3 className="text-xl font-extrabold text-slate-700 mb-2">Hali taqsimlanmagan</h3>
-            <p className="text-sm text-slate-500 font-medium mb-6 max-w-md text-center">
-              Yuqoridagi <strong>"Taqsimlash"</strong> tugmasini bosing. O'quvchilar xonalarga avtomatik ravishda teng taqsimlanadi.
-            </p>
-            <button onClick={handleGenerate} disabled={isAssigning} className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2">
-              <Shuffle className="w-5 h-5" /> Taqsimlashni Boshlash
-            </button>
+            <h3 className="text-xl font-extrabold text-slate-700 mb-2">Not Assigned Yet</h3>
+            {user?.role === 'superadmin' && (
+              <>
+                <p className="text-sm text-slate-500 font-medium mb-6 max-w-md text-center">
+                  Click the <strong>"Assign"</strong> button above. Students will be automatically and equally distributed to rooms.
+                </p>
+                <button onClick={handleGenerate} disabled={isAssigning} className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2">
+                  <Shuffle className="w-5 h-5" /> Start Assignment
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -186,8 +208,8 @@ const Exams = () => {
                       {room.room_number}
                     </div>
                     <div>
-                      <h3 className="font-bold text-slate-800 text-sm">{room.room_number}-xona</h3>
-                      <p className="text-[11px] text-slate-500 font-medium">{room.students.length} / {room.capacity} o'rin band</p>
+                      <h3 className="font-bold text-slate-800 text-sm">Room {room.room_number}</h3>
+                      <p className="text-[11px] text-slate-500 font-medium">{room.students.length} / {room.capacity} seats taken</p>
                     </div>
                   </div>
                   <div className={`text-xs font-extrabold px-2.5 py-1 rounded-lg ${room.students.length >= room.capacity ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
@@ -234,39 +256,40 @@ const Exams = () => {
       {/* HEADER */}
       <div className="flex justify-between items-end mb-8 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Imtihonlar markazi</h1>
-          <p className="text-slate-500 mt-1 text-sm font-medium">Barcha imtihonlarni yarating, jarayonni kuzating va xonalarga joylashtiring</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Exams Center</h1>
+          <p className="text-slate-500 mt-1 text-sm font-medium">Create and manage all exams, track progress, and assign rooms.</p>
         </div>
-        {form.id && (
+        {user?.role === 'superadmin' && form.id && (
           <button onClick={resetForm} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors flex items-center gap-2 text-sm">
-            <Plus className="w-4 h-4" /> Yangi
+            <Plus className="w-4 h-4" /> New
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-12">
+      {user?.role === 'superadmin' && (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 mb-12">
         {/* LEFT: FORM */}
         <div className="xl:col-span-5 flex flex-col gap-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-              {form.id ? <><Settings className="w-5 h-5 text-indigo-500" /> Tahrirlash: {form.name}</> : <><Plus className="w-5 h-5 text-indigo-500" /> Yangi Imtihon</>}
+              {form.id ? <><Settings className="w-5 h-5 text-indigo-500" /> Edit: {form.name}</> : <><Plus className="w-5 h-5 text-indigo-500" /> New Exam</>}
             </h2>
             <form id="examForm" onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Imtihon Nomi</label>
-                <input required type="text" placeholder="Masalan: 1-Ona tili va adabiyoti" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-medium text-slate-800" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Exam Name</label>
+                <input required type="text" placeholder="E.g: 1-Native Language and Literature" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-medium text-slate-800" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Sana</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Date</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar className="h-4 w-4 text-slate-400" /></div>
                     <input required type="date" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-700 font-medium" value={form.exam_date} onChange={e => setForm({...form, exam_date: e.target.value})} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Vaqt</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Time</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Clock className="h-4 w-4 text-slate-400" /></div>
                     <input required type="time" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-700 font-medium" value={form.exam_time} onChange={e => setForm({...form, exam_time: e.target.value})} />
@@ -275,30 +298,19 @@ const Exams = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Chorak</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Quarter</label>
                   <div className="relative">
                     <select required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-700 font-medium appearance-none" value={form.quarter} onChange={e => setForm({...form, quarter: e.target.value})}>
-                      <option value="1">1-chorak</option><option value="2">2-chorak</option><option value="3">3-chorak</option><option value="4">4-chorak</option><option value="5">Yillik / Yakuniy</option>
+                      <option value="1">1st Quarter</option><option value="2">2nd Quarter</option><option value="3">3rd Quarter</option><option value="4">4th Quarter</option><option value="5">Annual / Final</option>
                     </select>
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><ChevronDown className="h-4 w-4 text-slate-400" /></div>
                   </div>
                 </div>
-                {form.id && (
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Holat</label>
-                    <div className="relative">
-                      <select required className={`w-full px-4 py-3 border rounded-xl outline-none transition-all font-bold appearance-none ${form.status === 'active' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : form.status === 'done' ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-amber-50 border-amber-200 text-amber-700'}`} value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                        <option value="scheduled">Kutilmoqda</option><option value="active">Taqsimlangan (Aktiv)</option><option value="done">Tugagan</option>
-                      </select>
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><ChevronDown className={`h-4 w-4 ${form.status==='active'?'text-emerald-500':form.status==='done'?'text-slate-400':'text-amber-500'}`} /></div>
-                    </div>
-                  </div>
-                )}
               </div>
             </form>
           </div>
           <button type="submit" form="examForm" className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white px-8 py-4 rounded-xl flex items-center justify-center font-bold text-lg gap-2 shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all transform hover:-translate-y-0.5">
-            {form.id ? <CheckCircle2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />} {form.id ? 'Tahrirni Saqlash' : 'Imtihonni Yaratish'}
+            {form.id ? <CheckCircle2 className="w-6 h-6"/> : <Plus className="w-6 h-6" />} {form.id ? 'Save changes' : 'Create Exam'}
           </button>
         </div>
 
@@ -306,11 +318,11 @@ const Exams = () => {
         <div className="xl:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[550px]">
           <div className="flex p-2 bg-slate-50/80 border-b border-slate-100">
             <button type="button" onClick={() => setActiveTab('classes')} className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all duration-200 ${activeTab === 'classes' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
-              <Users className={`w-4 h-4 ${activeTab === 'classes' ? 'text-indigo-500' : ''}`} /> Sinflarni Tanlash
+              <Users className={`w-4 h-4 ${activeTab === 'classes' ? 'text-indigo-500' : ''}`} /> Select Classes
               {form.class_ids.length > 0 && <span className="ml-1.5 bg-indigo-100 text-indigo-700 py-0.5 px-2 rounded-full text-[10px]">{form.class_ids.length}</span>}
             </button>
             <button type="button" onClick={() => setActiveTab('rooms')} className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm transition-all duration-200 ${activeTab === 'rooms' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
-              <DoorOpen className={`w-4 h-4 ${activeTab === 'rooms' ? 'text-indigo-500' : ''}`} /> Xonalarni Tanlash
+              <DoorOpen className={`w-4 h-4 ${activeTab === 'rooms' ? 'text-indigo-500' : ''}`} /> Select Rooms
               {form.room_ids.length > 0 && <span className="ml-1.5 bg-indigo-100 text-indigo-700 py-0.5 px-2 rounded-full text-[10px]">{form.room_ids.length}</span>}
             </button>
           </div>
@@ -318,8 +330,8 @@ const Exams = () => {
             {/* CLASSES TAB */}
             <div className={`${activeTab === 'classes' ? 'block' : 'hidden'}`}>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-slate-800">Qatnashuvchi sinflar</h3>
-                <div className="text-xs font-semibold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">Tanlangan: {form.class_ids.length} ta</div>
+                <h3 className="text-sm font-bold text-slate-800">Participating classes</h3>
+                <div className="text-xs font-semibold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">Selected: {form.class_ids.length}</div>
               </div>
               <div className="flex flex-col gap-4">
                 {Object.entries(classes.reduce((acc, curr) => { if (!acc[curr.grade_level]) acc[curr.grade_level] = []; acc[curr.grade_level].push(curr); return acc; }, {})).map(([grade, gradeClasses]) => {
@@ -333,12 +345,12 @@ const Exams = () => {
                         <label className="flex items-center gap-3 cursor-pointer group" onClick={e => e.stopPropagation()}>
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg transition-colors ${someSelected || allSelected ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'}`}>{grade}</div>
                           <div>
-                            <span className="font-extrabold text-slate-800 text-base">{grade}-Sinflar</span>
-                            <p className="text-xs font-medium text-slate-500 mt-0.5">{gradeClasses.length} ta sinf mavjud</p>
+                            <span className="font-extrabold text-slate-800 text-base">Grade {grade} Classes</span>
+                            <p className="text-xs font-medium text-slate-500 mt-0.5">{gradeClasses.length} classes available</p>
                           </div>
                           <div className="ml-4 flex items-center gap-2">
                             <input type="checkbox" className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" checked={allSelected} ref={input => { if (input) input.indeterminate = someSelected }} onChange={() => setForm(prev => { const ids = gradeClasses.map(c => c.id); return {...prev, class_ids: allSelected ? prev.class_ids.filter(id => !ids.includes(id)) : [...new Set([...prev.class_ids, ...ids])]}; })} />
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">Barchasini belgilash</span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 group-hover:text-indigo-600 transition-colors">Select All</span>
                           </div>
                         </label>
                         <div className={`p-1.5 rounded-md transition-colors ${isOpen ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}>
@@ -356,7 +368,7 @@ const Exams = () => {
                                     <input type="checkbox" className="hidden" checked={sel} onChange={() => toggleClass(c.id)} />
                                     {sel && <div className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 bg-indigo-500 rounded-full text-white"><CheckSquare className="w-3 h-3" /></div>}
                                     <span className={`text-xl font-black mb-1 ${sel ? 'text-indigo-800' : 'text-slate-700'}`}>{c.name}</span>
-                                    <span className={`text-[11px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${sel ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{c.student_count || 0} O'quvchi</span>
+                                    <span className={`text-[11px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${sel ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{c.student_count || 0} Students</span>
                                   </label>
                                 );
                               })}
@@ -367,21 +379,21 @@ const Exams = () => {
                     </div>
                   );
                 })}
-                {classes.length === 0 && <div className="py-12 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><Users className="w-10 h-10 mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">Sinflar topilmadi</p></div>}
+                {classes.length === 0 && <div className="py-12 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><Users className="w-10 h-10 mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">No classes found</p></div>}
               </div>
             </div>
 
             {/* ROOMS TAB */}
             <div className={`${activeTab === 'rooms' ? 'block' : 'hidden'}`}>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-slate-800">Ajratilgan xonalar</h3>
-                <div className="text-xs font-semibold px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100">Tanlangan: {form.room_ids.length} ta</div>
+                <h3 className="text-sm font-bold text-slate-800">Allocated rooms</h3>
+                <div className="text-xs font-semibold px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100">Selected: {form.room_ids.length}</div>
               </div>
               <div className="flex items-center gap-3 mb-4 p-3 bg-white rounded-xl border border-slate-200">
                 <label className="flex items-center gap-3 cursor-pointer group select-none">
                   <input type="checkbox" className="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" checked={rooms.length > 0 && rooms.every(r => form.room_ids.includes(r.id))} onChange={() => { const all = rooms.every(r => form.room_ids.includes(r.id)); setForm(prev => ({...prev, room_ids: all ? [] : rooms.map(r => r.id)})); }} />
-                  <span className="font-bold text-sm text-slate-700 group-hover:text-blue-600 transition-colors">Barcha xonalarni tanlash</span>
-                  <span className="text-xs text-slate-400 font-medium">({rooms.length} ta xona)</span>
+                  <span className="font-bold text-sm text-slate-700 group-hover:text-blue-600 transition-colors">Select all rooms</span>
+                  <span className="text-xs text-slate-400 font-medium">({rooms.length} rooms)</span>
                 </label>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
@@ -392,57 +404,60 @@ const Exams = () => {
                       <input type="checkbox" className="hidden" checked={sel} onChange={() => toggleRoom(r.id)} />
                       {sel && <div className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 bg-blue-500 rounded-full text-white"><CheckSquare className="w-3 h-3" /></div>}
                       <span className={`text-xl font-black mb-1 ${sel ? 'text-blue-800' : 'text-slate-700'}`}>{r.room_number}</span>
-                      <span className={`text-[11px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${sel ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{r.capacity} O'rin</span>
+                      <span className={`text-[11px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${sel ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{r.capacity} Seats</span>
                     </label>
                   );
                 })}
-                {rooms.length === 0 && <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><DoorOpen className="w-10 h-10 mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">Xonalar topilmadi</p></div>}
+                {rooms.length === 0 && <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"><DoorOpen className="w-10 h-10 mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">No rooms found</p></div>}
               </div>
             </div>
           </div>
         </div>
       </div>
+      )}
 
       {/* EXAMS LIST */}
       <div>
-        <div className="flex items-center gap-3 mb-6"><List className="w-6 h-6 text-slate-400" /><h2 className="text-xl font-extrabold text-slate-800">Barcha imtihonlar ro'yxati</h2></div>
+        <div className="flex items-center gap-3 mb-6"><List className="w-6 h-6 text-slate-400" /><h2 className="text-xl font-extrabold text-slate-800">All Exams List</h2></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {exams.map(exam => (
             <div key={exam.id} className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden">
-              <div className={`absolute top-0 left-0 w-full h-1.5 ${exam.status === 'active' ? 'bg-emerald-500' : exam.status === 'done' ? 'bg-slate-300' : 'bg-amber-400'}`}></div>
+              <div className={`absolute top-0 left-0 w-full h-1.5 ${getExamStatus(exam) === 'Upcoming' ? 'bg-amber-400' : 'bg-slate-300'}`}></div>
               <div className="flex justify-between items-start mb-4 mt-1">
-                <span className={`px-2.5 py-1 text-xs rounded-lg font-bold border ${exam.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : exam.status === 'done' ? 'bg-slate-50 text-slate-600 border-slate-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                  {exam.status === 'scheduled' ? 'Kutilyapti' : exam.status === 'active' ? 'Taqsimlangan ✓' : 'Tugagan'}
+                <span className={`px-2.5 py-1 text-xs rounded-lg font-bold border ${getExamStatus(exam) === 'Upcoming' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                  {getExamStatus(exam)}
                 </span>
-                <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-4 group-hover:translate-x-0 duration-200">
-                  <button onClick={() => { setForm({...exam, exam_date: exam.exam_date.slice(0, 10), class_ids: exam.class_ids || [], room_ids: exam.room_ids || []}); window.scrollTo({ top: 0, behavior: 'smooth' }); }} title="Tahrirlash" className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Settings className="w-4 h-4" /></button>
-                  <button onClick={() => handleDelete(exam.id, exam.name)} title="O'chirish" className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
-                </div>
+                {user?.role === 'superadmin' && (
+                  <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-4 group-hover:translate-x-0 duration-200">
+                    <button onClick={() => { setForm({...exam, exam_date: exam.exam_date.slice(0, 10), class_ids: exam.class_ids || [], room_ids: exam.room_ids || []}); window.scrollTo({ top: 0, behavior: 'smooth' }); }} title="Edit" className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Settings className="w-4 h-4" /></button>
+                    <button onClick={() => handleDelete(exam.id, exam.name)} title="Delete" className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                )}
               </div>
               <h3 className="text-xl font-black text-slate-800 mb-2 truncate" title={exam.name}>{exam.name}</h3>
-              <p className="text-sm font-bold text-slate-400 mb-6">{exam.quarter}-chorak</p>
+              <p className="text-sm font-bold text-slate-400 mb-6">Quarter {exam.quarter}</p>
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <div className="bg-slate-50 rounded-xl p-3 border border-slate-100/50">
-                  <div className="flex items-center text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1"><Calendar className="w-3 h-3 mr-1" /> Sana</div>
-                  <div className="text-sm font-bold text-slate-700">{new Date(exam.exam_date).toLocaleDateString('uz-UZ', { day:'2-digit', month:'short' })}</div>
-                  <div className="text-xs font-semibold text-slate-500 mt-0.5">Soat {exam.exam_time?.slice(0, 5)}</div>
+                  <div className="flex items-center text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1"><Calendar className="w-3 h-3 mr-1" /> Date</div>
+                  <div className="text-sm font-bold text-slate-700">{new Date(exam.exam_date).toLocaleDateString('en-US')}</div>
+                  <div className="text-xs font-semibold text-slate-500 mt-0.5">Time {exam.exam_time?.slice(0, 5) || exam.start_time?.slice(0, 5)}</div>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3 border border-slate-100/50">
-                  <div className="flex items-center text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1"><Users className="w-3 h-3 mr-1" /> Sinflar</div>
+                  <div className="flex items-center text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1"><Users className="w-3 h-3 mr-1" /> Classes</div>
                   <div className="text-xs font-bold text-indigo-700 truncate" title={exam.class_names}>{exam.class_names || '-'}</div>
-                  <div className="text-xs font-semibold text-slate-500 mt-1 truncate">{exam.room_ids ? `${exam.room_ids.length} ta xona` : '-'}</div>
+                  <div className="text-xs font-semibold text-slate-500 mt-1 truncate">{exam.room_ids ? `${exam.room_ids.length} rooms` : '-'}</div>
                 </div>
               </div>
               <button onClick={() => openAssignmentPanel(exam.id)} className="w-full py-3 font-bold rounded-xl border transition-all flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 shadow-sm">
-                <Shuffle className="w-4 h-4"/> Taqsimotni Ko'rish
+                <Shuffle className="w-4 h-4"/> View Allocation
               </button>
             </div>
           ))}
           {exams.length === 0 && (
             <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 bg-white rounded-3xl border-2 border-dashed border-slate-200">
               <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4"><List className="w-10 h-10 text-slate-300" /></div>
-              <p className="text-xl font-extrabold text-slate-700 mb-1">Imtihonlar hali yo'q</p>
-              <p className="text-sm font-medium">Yuqoridagi forma orqali yarating.</p>
+              <p className="text-xl font-extrabold text-slate-700 mb-1">No exams yet</p>
+              <p className="text-sm font-medium">Create one using the form above.</p>
             </div>
           )}
         </div>

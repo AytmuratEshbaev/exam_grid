@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import { Users, DoorOpen, BookOpen, CalendarDays, GraduationCap, TrendingUp, ArrowUpRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const AdminDashboard = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState({ classes: 0, students: 0, rooms: 0, exams: 0 });
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -11,20 +13,19 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [clsRes, stuRes, rmRes, exmRes] = await Promise.all([
+        const [clsRes, rmRes, exmRes] = await Promise.all([
           api.get('/admin/classes'),
-          api.get('/admin/students'),
           api.get('/admin/rooms'),
           api.get('/admin/exams')
         ]);
         setStats({
           classes: clsRes.data.length,
-          students: stuRes.data.length,
+          students: clsRes.data.reduce((sum, c) => sum + (c.student_count || 0), 0),
           rooms: rmRes.data.length,
           exams: exmRes.data.length
         });
       } catch (error) {
-        console.error("Dashboard stats xatosi", error);
+        console.error("Dashboard stats error", error);
       } finally {
         setLoading(false);
       }
@@ -33,10 +34,10 @@ const AdminDashboard = () => {
   }, []);
 
   const cards = [
-    { title: "Sinflar", value: stats.classes, icon: GraduationCap, gradient: "from-indigo-500 to-purple-600", shadow: "shadow-indigo-500/20", link: "/admin/classes" },
-    { title: "O'quvchilar", value: stats.students, icon: Users, gradient: "from-emerald-500 to-green-600", shadow: "shadow-emerald-500/20", link: "/admin/classes" },
-    { title: "Xonalar", value: stats.rooms, icon: DoorOpen, gradient: "from-blue-500 to-cyan-600", shadow: "shadow-blue-500/20", link: "/admin/rooms" },
-    { title: "Imtihonlar", value: stats.exams, icon: CalendarDays, gradient: "from-amber-500 to-orange-600", shadow: "shadow-amber-500/20", link: "/admin/exams" }
+    { title: "Classes", value: stats.classes, icon: GraduationCap, gradient: "from-indigo-500 to-purple-600", shadow: "shadow-indigo-500/20", link: "/admin/classes" },
+    { title: "Students", value: stats.students, icon: Users, gradient: "from-emerald-500 to-green-600", shadow: "shadow-emerald-500/20", link: "/admin/classes" },
+    { title: "Rooms", value: stats.rooms, icon: DoorOpen, gradient: "from-blue-500 to-cyan-600", shadow: "shadow-blue-500/20", link: "/admin/rooms" },
+    { title: "Exams", value: stats.exams, icon: CalendarDays, gradient: "from-amber-500 to-orange-600", shadow: "shadow-amber-500/20", link: "/admin/exams" }
   ];
 
   if (loading) return (
@@ -48,9 +49,9 @@ const AdminDashboard = () => {
   return (
     <div className="max-w-7xl mx-auto pb-12">
       {/* HEADER */}
-      <div className="mb-8 border-b border-slate-200 pb-5">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard</h1>
-        <p className="text-slate-500 mt-1 text-sm font-medium">Tizimning umumiy holati va statistikasi</p>
+      <div className="mb-8">
+        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">System Dashboard</h1>
+        <p className="text-slate-500 mt-2 font-medium">Quick overview of ExamGrid system status and data.</p>
       </div>
 
       {/* STATS GRID */}
@@ -78,30 +79,32 @@ const AdminDashboard = () => {
       </div>
 
       {/* QUICK ACTIONS */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-        <div className="flex items-center gap-3 mb-6">
-          <TrendingUp className="w-6 h-6 text-indigo-500" />
-          <h2 className="text-xl font-extrabold text-slate-800">Tezkor havolalar</h2>
+      {user?.role === 'superadmin' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+          <div className="flex items-center gap-3 mb-6">
+            <TrendingUp className="w-6 h-6 text-indigo-500" />
+            <h2 className="text-xl font-extrabold text-slate-800">Quick Links</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Add New Class", to: "/admin/classes", color: "from-indigo-600 to-indigo-700", icon: GraduationCap },
+              { label: "Add Room", to: "/admin/rooms", color: "from-blue-600 to-blue-700", icon: DoorOpen },
+              { label: "Create Exam", to: "/admin/exams", color: "from-emerald-600 to-emerald-700", icon: CalendarDays },
+              { label: "Manage Classes", to: "/admin/classes", color: "from-purple-600 to-purple-700", icon: BookOpen }
+            ].map((action, i) => (
+              <button
+                key={i}
+                onClick={() => navigate(action.to)}
+                className={`bg-gradient-to-r ${action.color} text-white p-4 rounded-xl font-bold text-sm flex items-center gap-3 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all`}
+              >
+                <action.icon className="w-5 h-5 flex-shrink-0" />
+                {action.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Yangi sinf qo'shish", to: "/admin/classes", color: "from-indigo-600 to-indigo-700", icon: GraduationCap },
-            { label: "Xona qo'shish", to: "/admin/rooms", color: "from-blue-600 to-blue-700", icon: DoorOpen },
-            { label: "Imtihon yaratish", to: "/admin/exams", color: "from-emerald-600 to-emerald-700", icon: CalendarDays },
-            { label: "Sinflarni boshqarish", to: "/admin/classes", color: "from-purple-600 to-purple-700", icon: BookOpen }
-          ].map((action, i) => (
-            <button
-              key={i}
-              onClick={() => navigate(action.to)}
-              className={`bg-gradient-to-r ${action.color} text-white p-4 rounded-xl font-bold text-sm flex items-center gap-3 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all`}
-            >
-              <action.icon className="w-5 h-5 flex-shrink-0" />
-              {action.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

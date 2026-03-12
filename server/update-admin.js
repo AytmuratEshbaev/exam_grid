@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 async function updateAdminPassword() {
     try {
         const username = 'admin';
-        const password = 'admin123';
+        const password = '#Aytmurat3003';
         const newHash = await bcrypt.hash(password, 10);
         
         const result = await db.query(

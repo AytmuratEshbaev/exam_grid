@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS students (
     full_name VARCHAR(255) NOT NULL,
     class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL,
     student_code VARCHAR(20) UNIQUE,
+    student_id VARCHAR(20) UNIQUE,
     is_active BOOLEAN DEFAULT true
 );
 

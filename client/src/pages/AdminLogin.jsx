@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { Lock, User, BookOpen, ArrowRight } from 'lucide-react';
+import { Lock, User, ArrowRight } from 'lucide-react';
+import logo from '../images/logo.png';
 
 const AdminLogin = () => {
   const [username, setUsername] = useState('');
@@ -15,11 +16,17 @@ const AdminLogin = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await login(username, password);
-      toast.success('Xush kelibsiz!', { icon: '🎉' });
-      navigate('/admin');
+      const userData = await login(username, password);
+      toast.success('Welcome!', { icon: '🎉' });
+      
+      // Determine redirect based on role
+      if (userData?.user?.role === 'invigilator') {
+        navigate('/invigilator');
+      } else {
+        navigate('/admin');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Login yoki parol xato');
+      toast.error(error.response?.data?.message || 'Invalid username or password');
     } finally {
       setIsLoading(false);
     }
@@ -36,13 +43,13 @@ const AdminLogin = () => {
       <div className="max-w-md w-full relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-2xl shadow-indigo-500/30 mb-4">
-            <BookOpen className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-xl shadow-indigo-500/10 mb-4 p-2">
+            <img src={logo} alt="Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">
             <span className="text-indigo-400">Exam</span>Grid
           </h1>
-          <p className="mt-2 text-sm text-slate-400 font-medium">Boshqaruv paneliga kirish</p>
+          <p className="mt-2 text-sm text-slate-400 font-medium">Log in to the admin panel</p>
         </div>
 
         {/* Card */}
@@ -58,14 +65,14 @@ const AdminLogin = () => {
                   type="text"
                   required
                   className="w-full px-4 py-3.5 pl-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all font-medium"
-                  placeholder="Username kiriting"
+                  placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Parol</label>
+              <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-slate-500" />
@@ -89,14 +96,14 @@ const AdminLogin = () => {
               {isLoading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               ) : (
-                <>Kirish <ArrowRight className="w-5 h-5" /></>
+                <>Login <ArrowRight className="w-5 h-5" /></>
               )}
             </button>
           </form>
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-6 font-medium">
-          Faqat ro'yxatdan o'tgan administratorlar uchun
+          For registered administrators only
         </p>
       </div>
     </div>

@@ -11,7 +11,7 @@ exports.generateAssignments = async (req, res) => {
 
     // 1. Get Exam info
     const examCheck = await client.query('SELECT * FROM exams WHERE id = $1', [examId]);
-    if (examCheck.rows.length === 0) throw new Error('Imtihon topilmadi');
+    if (examCheck.rows.length === 0) throw new Error('Exam not found');
     const exam = examCheck.rows[0];
 
     // 2. Get Students for exam classes
@@ -22,7 +22,7 @@ exports.generateAssignments = async (req, res) => {
       WHERE ec.exam_id = $1 AND s.is_active = true
     `, [examId]);
     const students = studentsRes.rows;
-    if (students.length === 0) throw new Error("Bu imtihon sinflari uchun faol o'quvchilar topilmadi");
+    if (students.length === 0) throw new Error("No active students found for this exam's classes");
 
     // 3. Get assigned Rooms
     const roomsRes = await client.query(`
@@ -32,7 +32,7 @@ exports.generateAssignments = async (req, res) => {
       WHERE er.exam_id = $1
     `, [examId]);
     const rooms = roomsRes.rows;
-    if (rooms.length === 0) throw new Error("Bu imtihon uchun xonalar tanlanmagan");
+    if (rooms.length === 0) throw new Error("No rooms selected for this exam");
 
     // 4. Generate Assignments (this will throw if capacity is insufficient)
     const assignments = generateAssignments(students, rooms);
@@ -59,7 +59,7 @@ exports.generateAssignments = async (req, res) => {
     await client.query('UPDATE exams SET status = $1 WHERE id = $2', ['active', examId]);
 
     await client.query('COMMIT');
-    res.json({ message: "Taqsimlash muvaffaqiyatli amalga oshirildi!", total_assigned: assignments.length });
+    res.json({ message: "Assignment generated successfully!", total_assigned: assignments.length });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(400).json({ error: err.message });
@@ -96,7 +96,7 @@ exports.resetAssignments = async (req, res) => {
   try {
     await db.query('DELETE FROM assignments WHERE exam_id = $1', [examId]);
     await db.query("UPDATE exams SET status = 'scheduled' WHERE id = $1", [examId]);
-    res.json({ message: "Taqsimot bekor qilindi" });
+    res.json({ message: "Assignments reset successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

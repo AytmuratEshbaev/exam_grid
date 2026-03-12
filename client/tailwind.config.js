@@ -5,7 +5,13 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        schoolDark: '#0f0070',
+        schoolLight: '#2a1a8c',
+        schoolAccent: '#ffffff'
+      }
+    },
   },
   plugins: [],
 }
