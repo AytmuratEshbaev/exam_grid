@@ -1,0 +1,14 @@
+{
+  "name": "examgrid",
+  "version": "1.0.0",
+  "description": "ExamGrid FullStack Project",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "build": "cd client && npm install && npm run build",
+    "install-server": "cd server && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
