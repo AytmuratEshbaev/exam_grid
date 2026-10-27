@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Trash2, Plus, Edit, Users, ChevronRight, BookOpen, UserPlus, Upload, Download, Search, GraduationCap, X, Check, ArrowRightLeft, ChevronDown, RefreshCw, Info } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../../context/AuthContext';
+import { parseStudentImportRows } from '../../../services/studentImport.mjs';
 
 const Classes = () => {
   const { user } = useAuth();
@@ -12,7 +13,7 @@ const Classes = () => {
   const [isClassLoading, setIsClassLoading] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
   const [students, setStudents] = useState([]);
-  const [studentForm, setStudentForm] = useState({ full_name: '', student_code: '', student_id: '' });
+  const [studentForm, setStudentForm] = useState({ full_name: '', student_code: '', student_id: '', student_password: '' });
   const [isStudentLoading, setIsStudentLoading] = useState(false);
   const fileInputRef = useRef(null);
   const loginFileRef = useRef(null);
@@ -63,7 +64,7 @@ const Classes = () => {
     try {
       await api.post('/admin/students', { ...studentForm, class_id: selectedClass.id });
       toast.success("Student added", { icon: '🎉' });
-      setStudentForm({ full_name: '', student_code: '', student_id: '' });
+      setStudentForm({ full_name: '', student_code: '', student_id: '', student_password: '' });
       fetchStudents(selectedClass.id);
       fetchClasses();
     } catch { toast.error("Error saving student"); }
@@ -78,7 +79,7 @@ const Classes = () => {
 
   // --- EDIT STUDENT ---
   const startEditing = (std) => {
-    setEditingStudent({ id: std.id, full_name: std.full_name, student_code: std.student_code, class_id: std.class_id });
+    setEditingStudent({ id: std.id, full_name: std.full_name, student_code: std.student_code, student_password: std.student_password || '', class_id: std.class_id });
   };
 
   const cancelEditing = () => setEditingStudent(null);
@@ -129,9 +130,9 @@ const Classes = () => {
   };
 
   const handleDownloadSample = () => {
-    const wsData = [["Full Name", "Class", "Code"], ["John Doe", "9-A", "1001"], ["Jane Smith", "9-A", "1002"], ["Bob Johnson", "10-B", "1003"]];
+    const wsData = [["Full Name", "Class", "Login", "Password"], ["John Doe", "9-A", "1001", "sample-pass-1"], ["Jane Smith", "9-A", "1002", "sample-pass-2"], ["Bob Johnson", "10-B", "1003", "sample-pass-3"]];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [{wch: 30}, {wch: 15}, {wch: 20}];
+    ws['!cols'] = [{wch: 40}, {wch: 15}, {wch: 20}, {wch: 24}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     XLSX.writeFile(wb, "Students_Sample.xlsx");
@@ -145,16 +146,10 @@ const Classes = () => {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(worksheet);
+      const json = XLSX.utils.sheet_to_json(worksheet, { raw: false });
       if (json.length === 0) { toast.error("File is empty"); return; }
-      const studentsToImport = json.map(row => {
-        const keys = Object.keys(row);
-        const nameKey = keys.find(k => k.toLowerCase().includes('name') || k.toLowerCase().includes('ism') || k.toLowerCase().includes('fio'));
-        const classKey = keys.find(k => k.toLowerCase().includes('class') || k.toLowerCase().includes('sinf'));
-        const loginKey = keys.find(k => k.toLowerCase().includes('code') || k.toLowerCase().includes('login') || k.toLowerCase().includes('kod') || k.toLowerCase().includes('id'));
-        return { full_name: row[nameKey || keys[0]], class_name: row[classKey || keys[1]], student_code: row[loginKey || keys[2]] };
-      }).filter(s => s.full_name && s.class_name && s.student_code);
-      if (studentsToImport.length === 0) { toast.error("Columns do not match (Full Name, Class, Code)"); return; }
+      const studentsToImport = parseStudentImportRows(json);
+      if (studentsToImport.length === 0) { toast.error("Columns do not match (Full Name, Class, Login, Password)"); return; }
       toast.loading(`Importing ${studentsToImport.length} students...`);
       await api.post('/admin/students/import', { students: studentsToImport });
       toast.dismiss(); toast.success("Import successful!");
@@ -320,9 +315,9 @@ const Classes = () => {
             <>
               {/* Top Bar */}
               <div className="p-5 border-b border-slate-100 bg-slate-50/30">
-                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 whitespace-nowrap">
                       <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-sm font-black">{selectedClass.grade_level}</div>
                       Class {selectedClass.grade_level}-{selectedClass.name}
                     </h2>
@@ -335,10 +330,11 @@ const Classes = () => {
                           <ArrowRightLeft className="w-4 h-4" /> Move Class ({selectedStudentIds.length})
                         </button>
                       )}
-                      <form onSubmit={handleStudentSubmit} className="flex gap-2">
+                      <form onSubmit={handleStudentSubmit} className="flex flex-wrap gap-2">
                         <input type="text" required placeholder="ID" className="w-20 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_id} onChange={e => setStudentForm({...studentForm, student_id: e.target.value})} />
                         <input type="text" required placeholder="Full Name" className="w-36 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.full_name} onChange={e => setStudentForm({...studentForm, full_name: e.target.value})} />
                         <input type="text" required placeholder="Login" className="w-20 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_code} onChange={e => setStudentForm({...studentForm, student_code: e.target.value})} />
+                        <input type="text" required aria-label="Student password" placeholder="Password" autoComplete="off" className="w-32 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_password} onChange={e => setStudentForm({...studentForm, student_password: e.target.value})} />
                         <button type="submit" disabled={isStudentLoading} className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white px-4 py-2.5 rounded-xl transition-all flex items-center gap-1 flex-shrink-0 font-bold text-sm shadow-lg shadow-indigo-600/20">
                           <UserPlus className="w-4 h-4" />
                         </button>
@@ -373,27 +369,28 @@ const Classes = () => {
                 {students.length > 3 && (
                   <div className="mt-3 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" placeholder="Search (name or code)..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="Search (name or login)…" className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   </div>
                 )}
               </div>
               
               {/* Student Table */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-auto">
                 {filteredStudents.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 min-h-[250px]">
                     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><Users className="w-8 h-8 text-slate-300" /></div>
                     <p className="text-lg font-bold text-slate-500">{searchQuery ? 'No results found' : 'No students found'}</p>
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full min-w-[780px] text-left border-collapse">
                     <thead className="bg-white sticky top-0 z-10">
                       <tr className="border-b border-slate-200 bg-slate-50/80">
                         <th className="px-4 py-3 w-10">
                           <input type="checkbox" className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" checked={filteredStudents.length > 0 && selectedStudentIds.length === filteredStudents.length} onChange={selectAllStudents} />
                         </th>
                         <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest w-12">#</th>
-                        <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest w-28">Code</th>
+                        <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest w-28">Login</th>
+                        <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest w-32">Password</th>
                         <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest w-24">ID</th>
                         <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest">Full Name</th>
                         <th className="px-4 py-3 font-bold text-[10px] text-slate-500 uppercase tracking-widest">Class</th>
@@ -415,6 +412,13 @@ const Classes = () => {
                                 <input type="text" className="w-full px-2 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" value={editingStudent.student_code} onChange={e => setEditingStudent({...editingStudent, student_code: e.target.value})} />
                               ) : (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 font-mono border border-slate-200">{std.student_code}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {isEditing ? (
+                                <input type="text" aria-label="Student password" autoComplete="off" className="w-full min-w-[100px] px-2 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono" value={editingStudent.student_password} onChange={e => setEditingStudent({...editingStudent, student_password: e.target.value})} />
+                              ) : (
+                                <span className="text-xs text-slate-700 font-mono break-all">{std.student_password || '—'}</span>
                               )}
                             </td>
                             <td className="px-4 py-3">

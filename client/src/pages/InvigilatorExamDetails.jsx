@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import StudentCredentials from '../components/StudentCredentials';
 import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Search, DoorOpen, Users, Clock, Calendar, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
 
@@ -205,9 +206,7 @@ const InvigilatorExamDetails = () => {
                                 <h4 className="font-bold text-slate-800 text-sm pr-12 line-clamp-1" title={student.full_name}>{student.full_name || 'Unknown'}</h4>
                                 <div className="mt-2 flex items-center justify-between">
                                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{student.grade_level ? `${student.grade_level}-${student.class_name}` : student.class_name}</span>
-                                  <code className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-xs border border-slate-200 font-bold">
-                                    {student.student_code}
-                                  </code>
+                                  <StudentCredentials student={student} />
                                 </div>
                               </div>
                             </div>
@@ -250,7 +249,8 @@ const InvigilatorExamDetails = () => {
                             <thead>
                               <tr className="bg-white border-b border-slate-100">
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Full Name</th>
-                                <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Code</th>
+                                <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Login</th>
+                                <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Password</th>
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Room</th>
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Seat</th>
                               </tr>
@@ -263,6 +263,9 @@ const InvigilatorExamDetails = () => {
                                     <code className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs font-bold border border-slate-200">
                                       {student.student_code}
                                     </code>
+                                  </td>
+                                  <td className="py-3 px-5">
+                                    <span className="font-mono text-xs text-slate-700 break-all">{student.student_password || '—'}</span>
                                   </td>
                                   <td className="py-3 px-5">
                                     <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 font-black text-xs border border-blue-100">
@@ -294,7 +297,7 @@ const InvigilatorExamDetails = () => {
                   <input
                     type="text"
                     className="w-full px-4 py-4 pl-12 bg-white border-2 border-slate-200 focus:border-indigo-500 rounded-2xl shadow-sm focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all text-slate-800 font-medium text-lg placeholder:text-slate-400"
-                    placeholder="Enter student code or name..."
+                    placeholder="Enter student login or name…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     autoFocus
@@ -323,9 +326,7 @@ const InvigilatorExamDetails = () => {
                            <div className="bg-indigo-600 text-white text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-sm">
                              {student.grade_level ? `${student.grade_level}-${student.class_name}` : student.class_name} Class
                            </div>
-                           <code className="text-slate-500 font-mono text-xs font-bold bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                             {student.student_code}
-                           </code>
+                           <StudentCredentials student={student} />
                         </div>
                         <h3 className="text-lg font-black text-slate-800 mb-4 line-clamp-2 leading-tight" title={student.full_name}>{student.full_name || 'Unknown'}</h3>
                         

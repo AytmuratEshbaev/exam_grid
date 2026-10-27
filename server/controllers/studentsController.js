@@ -27,11 +27,11 @@ exports.getStudents = async (req, res) => {
 
 // Create a student
 exports.createStudent = async (req, res) => {
-  const { full_name, class_id, student_code, student_id, is_active } = req.body;
+  const { full_name, class_id, student_code, student_id, student_password, is_active } = req.body;
   try {
     const result = await db.query(
-      'INSERT INTO students (full_name, class_id, student_code, student_id, is_active) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [full_name, class_id, student_code, student_id || null, is_active !== undefined ? is_active : true]
+      'INSERT INTO students (full_name, class_id, student_code, student_id, is_active, student_password) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [full_name, class_id, student_code, student_id || null, is_active !== undefined ? is_active : true, student_password == null ? null : String(student_password)]
     );
     
     // Update class student count
@@ -95,8 +95,11 @@ exports.importStudents = async (req, res) => {
       }
 
       await client.query(
-        'INSERT INTO students (full_name, class_id, student_code) VALUES ($1, $2, $3) ON CONFLICT (student_code) DO NOTHING',
-        [student.full_name.trim(), classId, student.student_code.toString().trim()]
+        `INSERT INTO students (full_name, class_id, student_code, student_password) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (student_code) DO UPDATE
+         SET student_password = COALESCE(EXCLUDED.student_password, students.student_password)`,
+        [student.full_name.trim(), classId, student.student_code.toString().trim(),
+         student.student_password == null || student.student_password === '' ? null : String(student.student_password)]
       );
     }
     
@@ -141,7 +144,7 @@ exports.deleteStudent = async (req, res) => {
 // Update student (FIO, login, class)
 exports.updateStudent = async (req, res) => {
   const { id } = req.params;
-  const { full_name, student_code, class_id } = req.body;
+  const { full_name, student_code, class_id, student_password } = req.body;
   try {
     // Get old class_id
     const old = await db.query('SELECT class_id FROM students WHERE id = $1', [id]);
@@ -149,8 +152,8 @@ exports.updateStudent = async (req, res) => {
     const oldClassId = old.rows[0].class_id;
 
     const result = await db.query(
-      'UPDATE students SET full_name=$1, student_code=$2, class_id=$3 WHERE id=$4 RETURNING *',
-      [full_name, student_code, class_id, id]
+      'UPDATE students SET full_name=$1, student_code=$2, class_id=$3, student_password=COALESCE($4, student_password) WHERE id=$5 RETURNING *',
+      [full_name, student_code, class_id, student_password == null ? null : String(student_password), id]
     );
 
     // Recalculate counts for both old and new class

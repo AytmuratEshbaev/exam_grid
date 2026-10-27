@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../../services/api';
+import StudentCredentials from '../../StudentCredentials';
 import toast from 'react-hot-toast';
 import { Trash2, Plus, Calendar, Settings, CheckSquare, Clock, Users, DoorOpen, List, ChevronDown, CheckCircle2, Shuffle, RotateCcw, ArrowLeft, X } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
@@ -231,7 +232,7 @@ const Exams = () => {
                         <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-1.5 px-2 text-[10px] font-bold text-slate-400 w-6">{i + 1}</td>
                           <td className="py-1.5 px-2">
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{s.student_code}</span>
+                            <StudentCredentials student={s} />
                           </td>
                           <td className="py-1.5 px-2 text-xs font-semibold text-slate-700 truncate max-w-[140px]" title={s.full_name}>{s.full_name}</td>
                           <td className="py-1.5 px-2 text-right">

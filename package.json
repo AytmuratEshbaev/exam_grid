@@ -9,6 +9,7 @@
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
     "db:init": "npm run db:init --prefix server",
+    "db:migrate": "npm run db:migrate --prefix server",
     "install-server": "npm ci --prefix server",
     "install:all": "npm ci --prefix server && npm ci --prefix client --include=dev",
     "test": "node --test server/test/*.test.js"
