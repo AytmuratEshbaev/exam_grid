@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { ArrowLeft, Search, DoorOpen, Users, Clock, Calendar, CheckCircle2, AlertCircle, ChevronRight, GraduationCap } from 'lucide-react';
 import logo from '../images/logo.png';
 
@@ -23,7 +23,7 @@ const PublicExamDetails = () => {
   useEffect(() => {
     const fetchExamData = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/public/exam/${id}`);
+        const res = await api.get(`/public/exam/${id}`);
         setExam(res.data.exam);
         setAssignments(res.data.assignments);
       } catch (err) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Calendar, Clock, CheckCircle2, ChevronRight, GraduationCap } from 'lucide-react';
 import { FaGraduationCap } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
@@ -17,7 +17,7 @@ const HomePage = () => {
   const fetchTodayExams = async () => {
     setIsLoading(true);
     try {
-      const res = await axios.get('http://localhost:5000/api/public/today-exams');
+      const res = await api.get('/public/today-exams');
       setExams(res.data);
     } catch (err) {
       console.error('Error fetching exams:', err);
