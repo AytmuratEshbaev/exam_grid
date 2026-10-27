@@ -10,8 +10,8 @@ exports.getTodayExams = async (req, res) => {
       FROM exams e 
       JOIN exam_classes ec ON e.id = ec.exam_id
       JOIN classes c ON ec.class_id = c.id
-      WHERE (e.exam_date + e.exam_time) >= (CURRENT_TIMESTAMP - INTERVAL '7 days')
-        AND (e.exam_date + e.exam_time) <= (CURRENT_TIMESTAMP + INTERVAL '7 days') 
+      WHERE (e.exam_date + e.exam_time) >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') - INTERVAL '7 days')
+        AND (e.exam_date + e.exam_time) <= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') + INTERVAL '7 days')
         AND e.status != 'scheduled'
       GROUP BY e.id
       ORDER BY e.exam_date ASC, e.exam_time ASC
@@ -45,8 +45,8 @@ exports.searchStudent = async (req, res) => {
       JOIN exams e ON a.exam_id = e.id
       JOIN classes c ON s.class_id = c.id
       JOIN rooms r ON a.room_id = r.id
-      WHERE (e.exam_date + e.exam_time) >= (CURRENT_TIMESTAMP - INTERVAL '7 days')
-        AND (e.exam_date + e.exam_time) <= (CURRENT_TIMESTAMP + INTERVAL '7 days') 
+      WHERE (e.exam_date + e.exam_time) >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') - INTERVAL '7 days')
+        AND (e.exam_date + e.exam_time) <= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') + INTERVAL '7 days')
         AND e.status != 'scheduled'
         AND (s.full_name ILIKE $1 OR s.student_code ILIKE $2)
     `;
@@ -87,8 +87,8 @@ exports.getExamDetailsPublic = async (req, res) => {
     const examCheck = await db.query(`
       SELECT * FROM exams 
       WHERE id = $1
-        AND (exam_date + exam_time) >= (CURRENT_TIMESTAMP - INTERVAL '7 days')
-        AND (exam_date + exam_time) <= (CURRENT_TIMESTAMP + INTERVAL '7 days')
+        AND (exam_date + exam_time) >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') - INTERVAL '7 days')
+        AND (exam_date + exam_time) <= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') + INTERVAL '7 days')
         AND status != 'scheduled'
     `, [examId]);
 

@@ -7,8 +7,8 @@ exports.getExams = async (req, res) => {
     let whereClause = "";
     if (req.user && req.user.role === 'invigilator') {
       whereClause = `
-        WHERE (e.exam_date + e.exam_time) >= (CURRENT_TIMESTAMP - INTERVAL '7 days') 
-          AND (e.exam_date + e.exam_time) <= (CURRENT_TIMESTAMP + INTERVAL '7 days')
+        WHERE (e.exam_date + e.exam_time) >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') - INTERVAL '7 days')
+          AND (e.exam_date + e.exam_time) <= ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tashkent') + INTERVAL '7 days')
       `;
     }
 
@@ -36,9 +36,10 @@ exports.getExams = async (req, res) => {
 // Create an exam
 exports.createExam = async (req, res) => {
   const { name, exam_date, exam_time, class_ids, room_ids, quarter, status } = req.body;
+  const client = await db.pool.connect();
   try {
-    await db.query('BEGIN');
-    const result = await db.query(
+    await client.query('BEGIN');
+    const result = await client.query(
       'INSERT INTO exams (name, exam_date, exam_time, quarter, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [name, exam_date, exam_time, quarter, status || 'scheduled']
     );
@@ -46,34 +47,34 @@ exports.createExam = async (req, res) => {
 
     if (class_ids && Array.isArray(class_ids)) {
       for (let cid of class_ids) {
-        await db.query('INSERT INTO exam_classes (exam_id, class_id) VALUES ($1, $2)', [exam.id, cid]);
+        await client.query('INSERT INTO exam_classes (exam_id, class_id) VALUES ($1, $2)', [exam.id, cid]);
       }
     }
 
     if (room_ids && Array.isArray(room_ids)) {
       for (let rid of room_ids) {
-         await db.query('INSERT INTO exam_rooms (exam_id, room_id) VALUES ($1, $2)', [exam.id, rid]);
+         await client.query('INSERT INTO exam_rooms (exam_id, room_id) VALUES ($1, $2)', [exam.id, rid]);
       }
     }
-    
+
     // Auto-assign students to rooms
-    const studentsRes = await db.query(`
+    const studentsRes = await client.query(`
       SELECT s.id, s.class_id FROM students s
       JOIN exam_classes ec ON s.class_id = ec.class_id
       WHERE ec.exam_id = $1 AND s.is_active = true
     `, [exam.id]);
-    const roomsRes = await db.query(`
+    const roomsRes = await client.query(`
       SELECT r.id, r.capacity FROM rooms r
       JOIN exam_rooms er ON r.id = er.room_id
       WHERE er.exam_id = $1
     `, [exam.id]);
 
     if (studentsRes.rows.length === 0) {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: "No active students found in the selected classes. Cannot create exam." });
     }
     if (roomsRes.rows.length === 0) {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: "No rooms selected. Cannot create exam." });
     }
 
@@ -89,16 +90,18 @@ exports.createExam = async (req, res) => {
         values.push(exam.id, a.student_id, a.room_id, a.seat_row, a.seat_number);
       }
       insertQuery = insertQuery.slice(0, -1);
-      await db.query(insertQuery, values);
-      await db.query("UPDATE exams SET status = 'active' WHERE id = $1", [exam.id]);
+      await client.query(insertQuery, values);
+      await client.query("UPDATE exams SET status = 'active' WHERE id = $1", [exam.id]);
     }
 
-    await db.query('COMMIT');
+    await client.query('COMMIT');
     res.status(201).json({ ...exam, assignment: { total_assigned: assignments.length } });
   } catch (err) {
-    await db.query('ROLLBACK');
+    await client.query('ROLLBACK');
     // Show the capacity error message directly
     res.status(400).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -106,39 +109,42 @@ exports.createExam = async (req, res) => {
 exports.updateExam = async (req, res) => {
   const { id } = req.params;
   const { name, exam_date, exam_time, class_ids, room_ids, quarter, status } = req.body;
+  const client = await db.pool.connect();
   try {
-    await db.query('BEGIN');
-    const result = await db.query(
+    await client.query('BEGIN');
+    const result = await client.query(
       'UPDATE exams SET name=$1, exam_date=$2, exam_time=$3, quarter=$4, status=$5 WHERE id=$6 RETURNING *',
       [name, exam_date, exam_time, quarter, status, id]
     );
-    
+
     if (result.rows.length === 0) {
-      await db.query('ROLLBACK');
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Exam not found' });
     }
 
     // Update classes
     if (class_ids && Array.isArray(class_ids)) {
-      await db.query('DELETE FROM exam_classes WHERE exam_id = $1', [id]);
+      await client.query('DELETE FROM exam_classes WHERE exam_id = $1', [id]);
       for (let cid of class_ids) {
-        await db.query('INSERT INTO exam_classes (exam_id, class_id) VALUES ($1, $2)', [id, cid]);
+        await client.query('INSERT INTO exam_classes (exam_id, class_id) VALUES ($1, $2)', [id, cid]);
       }
     }
 
     // Update rooms
     if (room_ids && Array.isArray(room_ids)) {
-      await db.query('DELETE FROM exam_rooms WHERE exam_id = $1', [id]);
+      await client.query('DELETE FROM exam_rooms WHERE exam_id = $1', [id]);
       for (let rid of room_ids) {
-        await db.query('INSERT INTO exam_rooms (exam_id, room_id) VALUES ($1, $2)', [id, rid]);
+        await client.query('INSERT INTO exam_rooms (exam_id, room_id) VALUES ($1, $2)', [id, rid]);
       }
     }
 
-    await db.query('COMMIT');
+    await client.query('COMMIT');
     res.json(result.rows[0]);
   } catch (err) {
-    await db.query('ROLLBACK');
+    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
 

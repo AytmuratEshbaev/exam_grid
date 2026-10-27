@@ -1,4 +1,8 @@
 -- Database schema for ExamGrid
+-- Barcha eski migratsiyalar (exam_classes, exam_rooms, student_id) shu faylga birlashtirilgan
+
+-- Toshkent vaqtiga bog'liq taqqoslashlar API so'rovlarida AT TIME ZONE bilan beriladi.
+-- Neon pooled ulanishlarida session yoki database timezone sozlamasiga tayanmaymiz.
 
 -- 1. classes table
 CREATE TABLE IF NOT EXISTS classes (
@@ -13,8 +17,8 @@ CREATE TABLE IF NOT EXISTS students (
     id SERIAL PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
     class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL,
-    student_code VARCHAR(20) UNIQUE,
-    student_id VARCHAR(20) UNIQUE,
+    student_code VARCHAR(20) UNIQUE, -- login, har chorakda o'zgarishi mumkin
+    student_id VARCHAR(20) UNIQUE,   -- doimiy identifikator
     is_active BOOLEAN DEFAULT true
 );
 
@@ -34,13 +38,25 @@ CREATE TABLE IF NOT EXISTS exams (
     name VARCHAR(255) NOT NULL,
     exam_date DATE NOT NULL,
     exam_time TIME NOT NULL,
-    class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE,
     quarter INTEGER NOT NULL,
-    academic_year VARCHAR(10) NOT NULL,
     status VARCHAR(20) DEFAULT 'scheduled' -- scheduled, active, done
 );
 
--- 5. assignments table
+-- 5. exam_classes table (imtihon <-> sinflar)
+CREATE TABLE IF NOT EXISTS exam_classes (
+    exam_id INTEGER REFERENCES exams(id) ON DELETE CASCADE,
+    class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE,
+    PRIMARY KEY (exam_id, class_id)
+);
+
+-- 6. exam_rooms table (imtihon <-> xonalar)
+CREATE TABLE IF NOT EXISTS exam_rooms (
+    exam_id INTEGER REFERENCES exams(id) ON DELETE CASCADE,
+    room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
+    PRIMARY KEY (exam_id, room_id)
+);
+
+-- 7. assignments table
 CREATE TABLE IF NOT EXISTS assignments (
     id SERIAL PRIMARY KEY,
     exam_id INTEGER REFERENCES exams(id) ON DELETE CASCADE,
@@ -52,7 +68,10 @@ CREATE TABLE IF NOT EXISTS assignments (
     UNIQUE(exam_id, student_id) -- Bitta imtihonda 1 o'quvchi faqat 1 ta o'ringa taqsimlanadi
 );
 
--- 6. admins table
+CREATE INDEX IF NOT EXISTS idx_assignments_exam_id ON assignments(exam_id);
+CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id);
+
+-- 8. admins table
 CREATE TABLE IF NOT EXISTS admins (
     id SERIAL PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL,
@@ -62,8 +81,4 @@ CREATE TABLE IF NOT EXISTS admins (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert a default superadmin (password: admin123)
--- Hash generated for 'admin123' using bcrypt
-INSERT INTO admins (username, password_hash, full_name, role) 
-VALUES ('admin', '$2b$10$qNswKewnFqbb4uw6qtbJf.a6vvFnx6QfpjI72kbJKgv3ZeQRkpTay', 'Super Admin', 'superadmin')
-ON CONFLICT (username) DO NOTHING;
+-- Superadmin bu yerda yaratilmaydi: `npm run db:init` uni ADMIN_USERNAME / ADMIN_PASSWORD dan yaratadi

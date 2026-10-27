@@ -5,10 +5,15 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "build": "cd client && npm install && npm run build",
-    "install-server": "cd server && npm install"
+    "build": "npm run build --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "db:init": "npm run db:init --prefix server",
+    "install-server": "npm ci --prefix server",
+    "install:all": "npm ci --prefix server && npm ci --prefix client --include=dev",
+    "test": "node --test server/test/*.test.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "24.x"
   }
 }

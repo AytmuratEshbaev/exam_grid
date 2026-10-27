@@ -173,29 +173,32 @@ exports.bulkTransfer = async (req, res) => {
   if (!Array.isArray(student_ids) || student_ids.length === 0 || !target_class_id) {
     return res.status(400).json({ message: 'student_ids va target_class_id kerak' });
   }
+  const client = await db.pool.connect();
   try {
-    await db.query('BEGIN');
-    
+    await client.query('BEGIN');
+
     // Get affected old classes
-    const oldClasses = await db.query('SELECT DISTINCT class_id FROM students WHERE id = ANY($1::int[])', [student_ids]);
-    
+    const oldClasses = await client.query('SELECT DISTINCT class_id FROM students WHERE id = ANY($1::int[])', [student_ids]);
+
     // Update all students
-    await db.query('UPDATE students SET class_id = $1 WHERE id = ANY($2::int[])', [target_class_id, student_ids]);
-    
+    await client.query('UPDATE students SET class_id = $1 WHERE id = ANY($2::int[])', [target_class_id, student_ids]);
+
     // Recalculate counts for old classes
     for (const row of oldClasses.rows) {
       if (row.class_id) {
-        await db.query('UPDATE classes SET student_count = (SELECT COUNT(*) FROM students WHERE class_id = $1 AND is_active = true) WHERE id = $1', [row.class_id]);
+        await client.query('UPDATE classes SET student_count = (SELECT COUNT(*) FROM students WHERE class_id = $1 AND is_active = true) WHERE id = $1', [row.class_id]);
       }
     }
     // Recalculate count for target class
-    await db.query('UPDATE classes SET student_count = (SELECT COUNT(*) FROM students WHERE class_id = $1 AND is_active = true) WHERE id = $1', [target_class_id]);
-    
-    await db.query('COMMIT');
+    await client.query('UPDATE classes SET student_count = (SELECT COUNT(*) FROM students WHERE class_id = $1 AND is_active = true) WHERE id = $1', [target_class_id]);
+
+    await client.query('COMMIT');
     res.json({ message: `${student_ids.length} students transferred successfully` });
   } catch (err) {
-    await db.query('ROLLBACK');
+    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -206,9 +209,10 @@ exports.importStudentIds = async (req, res) => {
     return res.status(400).json({ message: 'Invalid data: expected array of { student_code, student_id }' });
   }
 
+  const client = await db.pool.connect();
   try {
-    await db.query('BEGIN');
-    
+    await client.query('BEGIN');
+
     let updated = 0;
     let notFound = 0;
     const notFoundList = [];
@@ -219,7 +223,7 @@ exports.importStudentIds = async (req, res) => {
       const code = entry.student_code.toString().trim();
       const sid = entry.student_id.toString().trim();
 
-      const result = await db.query(
+      const result = await client.query(
         'UPDATE students SET student_id = $1 WHERE student_code = $2',
         [sid, code]
       );
@@ -232,16 +236,18 @@ exports.importStudentIds = async (req, res) => {
       }
     }
 
-    await db.query('COMMIT');
-    res.json({ 
-      message: `Successfully updated ${updated} student IDs`, 
-      updated, 
+    await client.query('COMMIT');
+    res.json({
+      message: `Successfully updated ${updated} student IDs`,
+      updated,
       notFound,
       notFoundList: notFoundList.slice(0, 20) // Show first 20 not found
     });
   } catch (err) {
-    await db.query('ROLLBACK');
+    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -252,9 +258,10 @@ exports.updateLogins = async (req, res) => {
     return res.status(400).json({ message: 'Invalid data: expected array of { student_id, student_code }' });
   }
 
+  const client = await db.pool.connect();
   try {
-    await db.query('BEGIN');
-    
+    await client.query('BEGIN');
+
     let updated = 0;
     let notFound = 0;
     const notFoundList = [];
@@ -265,7 +272,7 @@ exports.updateLogins = async (req, res) => {
       const sid = entry.student_id.toString().trim();
       const newCode = entry.student_code.toString().trim();
 
-      const result = await db.query(
+      const result = await client.query(
         'UPDATE students SET student_code = $1 WHERE student_id = $2',
         [newCode, sid]
       );
@@ -278,15 +285,17 @@ exports.updateLogins = async (req, res) => {
       }
     }
 
-    await db.query('COMMIT');
-    res.json({ 
-      message: `Successfully updated ${updated} logins`, 
-      updated, 
+    await client.query('COMMIT');
+    res.json({
+      message: `Successfully updated ${updated} logins`,
+      updated,
       notFound,
       notFoundList: notFoundList.slice(0, 20)
     });
   } catch (err) {
-    await db.query('ROLLBACK');
+    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 };
