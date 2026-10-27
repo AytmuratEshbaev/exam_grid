@@ -249,6 +249,7 @@ const InvigilatorExamDetails = () => {
                             <thead>
                               <tr className="bg-white border-b border-slate-100">
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Full Name</th>
+                                <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">ID</th>
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Login</th>
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Password</th>
                                 <th className="py-3 px-5 text-xs font-extrabold text-slate-400 tracking-wider">Room</th>
@@ -259,6 +260,7 @@ const InvigilatorExamDetails = () => {
                               {students.sort((a,b) => (a.full_name || '').localeCompare(b.full_name || '')).map((student, idx) => (
                                 <tr key={student.assignment_id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/30'}`}>
                                   <td className="py-3 px-5 font-bold text-slate-800 text-sm">{student.full_name || 'Unknown'}</td>
+                                  <td className="py-3 px-5 font-mono text-xs text-slate-700">{student.student_id || '—'}</td>
                                   <td className="py-3 px-5">
                                     <code className="bg-slate-100 text-slate-600 px-2 py-1 rounded font-mono text-xs font-bold border border-slate-200">
                                       {student.student_code}

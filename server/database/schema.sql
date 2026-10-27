@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS students (
     class_id INTEGER REFERENCES classes(id) ON DELETE SET NULL,
     student_code VARCHAR(20) UNIQUE, -- login, har chorakda o'zgarishi mumkin
     student_password TEXT,          -- external exam platform credential; staff API only
-    student_id VARCHAR(20) UNIQUE,   -- doimiy identifikator
+    student_id VARCHAR(20) UNIQUE CONSTRAINT students_numeric_student_id CHECK (student_id ~ '^[0-9]+$'), -- permanent numeric ID
     is_active BOOLEAN DEFAULT true
 );
 

@@ -74,7 +74,7 @@ exports.getAssignments = async (req, res) => {
   try {
     const result = await db.query(`
       SELECT a.id, a.seat_number, 
-             s.full_name, s.student_code, s.student_password,
+             s.full_name, s.student_code, s.student_password, s.student_id,
              c.name as class_name, c.grade_level,
              r.room_number, r.capacity, r.id as room_id
       FROM assignments a

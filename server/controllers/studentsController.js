@@ -1,4 +1,5 @@
 const db = require('../database/db');
+const { normalizeStudentId } = require('../services/studentId');
 
 // Get all students
 exports.getStudents = async (req, res) => {
@@ -28,10 +29,13 @@ exports.getStudents = async (req, res) => {
 // Create a student
 exports.createStudent = async (req, res) => {
   const { full_name, class_id, student_code, student_id, student_password, is_active } = req.body;
+  let permanentId;
+  try { permanentId = normalizeStudentId(student_id); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
   try {
     const result = await db.query(
       'INSERT INTO students (full_name, class_id, student_code, student_id, is_active, student_password) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [full_name, class_id, student_code, student_id || null, is_active !== undefined ? is_active : true, student_password == null ? null : String(student_password)]
+      [full_name, class_id, student_code, permanentId, is_active !== undefined ? is_active : true, student_password == null ? null : String(student_password)]
     );
     
     // Update class student count
@@ -51,6 +55,10 @@ exports.importStudents = async (req, res) => {
   if (!Array.isArray(students) || students.length === 0) {
     return res.status(400).json({ message: 'Invalid students data' });
   }
+
+  try {
+    for (const student of students) normalizeStudentId(student.student_id);
+  } catch (error) { return res.status(400).json({ error: error.message }); }
 
   const client = await db.pool.connect();
   try {
@@ -95,11 +103,13 @@ exports.importStudents = async (req, res) => {
       }
 
       await client.query(
-        `INSERT INTO students (full_name, class_id, student_code, student_password) VALUES ($1, $2, $3, $4)
+        `INSERT INTO students (full_name, class_id, student_code, student_password, student_id) VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (student_code) DO UPDATE
-         SET student_password = COALESCE(EXCLUDED.student_password, students.student_password)`,
+         SET student_password = COALESCE(EXCLUDED.student_password, students.student_password),
+             student_id = COALESCE(EXCLUDED.student_id, students.student_id)`,
         [student.full_name.trim(), classId, student.student_code.toString().trim(),
-         student.student_password == null || student.student_password === '' ? null : String(student.student_password)]
+         student.student_password == null || student.student_password === '' ? null : String(student.student_password),
+         normalizeStudentId(student.student_id)]
       );
     }
     
@@ -144,7 +154,10 @@ exports.deleteStudent = async (req, res) => {
 // Update student (FIO, login, class)
 exports.updateStudent = async (req, res) => {
   const { id } = req.params;
-  const { full_name, student_code, class_id, student_password } = req.body;
+  const { full_name, student_code, class_id, student_password, student_id } = req.body;
+  let permanentId;
+  try { permanentId = normalizeStudentId(student_id); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
   try {
     // Get old class_id
     const old = await db.query('SELECT class_id FROM students WHERE id = $1', [id]);
@@ -152,8 +165,8 @@ exports.updateStudent = async (req, res) => {
     const oldClassId = old.rows[0].class_id;
 
     const result = await db.query(
-      'UPDATE students SET full_name=$1, student_code=$2, class_id=$3, student_password=COALESCE($4, student_password) WHERE id=$5 RETURNING *',
-      [full_name, student_code, class_id, student_password == null ? null : String(student_password), id]
+      'UPDATE students SET full_name=$1, student_code=$2, class_id=$3, student_password=COALESCE($4, student_password), student_id=COALESCE($5, student_id) WHERE id=$6 RETURNING *',
+      [full_name, student_code, class_id, student_password == null ? null : String(student_password), permanentId, id]
     );
 
     // Recalculate counts for both old and new class
@@ -212,6 +225,10 @@ exports.importStudentIds = async (req, res) => {
     return res.status(400).json({ message: 'Invalid data: expected array of { student_code, student_id }' });
   }
 
+  try {
+    for (const entry of entries) normalizeStudentId(entry.student_id, true);
+  } catch (error) { return res.status(400).json({ error: error.message }); }
+
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
@@ -224,7 +241,7 @@ exports.importStudentIds = async (req, res) => {
       if (!entry.student_code || !entry.student_id) continue;
 
       const code = entry.student_code.toString().trim();
-      const sid = entry.student_id.toString().trim();
+      const sid = normalizeStudentId(entry.student_id, true);
 
       const result = await client.query(
         'UPDATE students SET student_id = $1 WHERE student_code = $2',
@@ -254,12 +271,31 @@ exports.importStudentIds = async (req, res) => {
   }
 };
 
-// Update student logins (student_code) by matching on student_id
+// Update external login AND password using the permanent numeric student_id.
 exports.updateLogins = async (req, res) => {
-  const entries = req.body.entries; // array of { student_id, student_code }
+  const entries = req.body.entries;
   if (!Array.isArray(entries) || entries.length === 0) {
-    return res.status(400).json({ message: 'Invalid data: expected array of { student_id, student_code }' });
+    return res.status(400).json({ error: 'ID, Login va Password ustunlari kerak' });
   }
+
+  let normalized;
+  try {
+    normalized = entries.map(entry => {
+      const student_id = normalizeStudentId(entry.student_id, true);
+      const student_code = String(entry.student_code ?? '').trim();
+      const student_password = entry.student_password == null ? '' : String(entry.student_password);
+      if (!student_code || student_code.length > 20 || !student_password.trim()) {
+        throw new Error('Har bir qatorda ID, Login va Password to‘ldirilishi kerak (Login: ko‘pi bilan 20 belgi)');
+      }
+      return { student_id, student_code, student_password };
+    });
+    if (new Set(normalized.map(entry => entry.student_id)).size !== normalized.length) {
+      throw new Error('Faylda takroriy ID bor');
+    }
+    if (new Set(normalized.map(entry => entry.student_code)).size !== normalized.length) {
+      throw new Error('Faylda takroriy Login bor');
+    }
+  } catch (error) { return res.status(400).json({ error: error.message }); }
 
   const client = await db.pool.connect();
   try {
@@ -269,15 +305,17 @@ exports.updateLogins = async (req, res) => {
     let notFound = 0;
     const notFoundList = [];
 
-    for (const entry of entries) {
-      if (!entry.student_id || !entry.student_code) continue;
+    // Clear only the matched logins inside this transaction to allow login swaps.
+    // Any conflict with an unrelated student's login rolls the entire batch back.
+    await client.query('UPDATE students SET student_code = NULL WHERE student_id = ANY($1::varchar[])',
+      [normalized.map(entry => entry.student_id)]);
 
-      const sid = entry.student_id.toString().trim();
-      const newCode = entry.student_code.toString().trim();
+    for (const entry of normalized) {
+      const sid = entry.student_id;
 
       const result = await client.query(
-        'UPDATE students SET student_code = $1 WHERE student_id = $2',
-        [newCode, sid]
+        'UPDATE students SET student_code = $1, student_password = $2 WHERE student_id = $3',
+        [entry.student_code, entry.student_password, sid]
       );
 
       if (result.rowCount > 0) {
@@ -290,7 +328,7 @@ exports.updateLogins = async (req, res) => {
 
     await client.query('COMMIT');
     res.json({
-      message: `Successfully updated ${updated} logins`,
+      message: `Successfully updated ${updated} logins and passwords`,
       updated,
       notFound,
       notFoundList: notFoundList.slice(0, 20)

@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { Trash2, Plus, Edit, Users, ChevronRight, BookOpen, UserPlus, Upload, Download, Search, GraduationCap, X, Check, ArrowRightLeft, ChevronDown, RefreshCw, Info } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../../context/AuthContext';
-import { parseStudentImportRows } from '../../../services/studentImport.mjs';
+import { parseStudentImportRows, parseCredentialUpdateRows } from '../../../services/studentImport.mjs';
 
 const Classes = () => {
   const { user } = useAuth();
@@ -67,7 +67,7 @@ const Classes = () => {
       setStudentForm({ full_name: '', student_code: '', student_id: '', student_password: '' });
       fetchStudents(selectedClass.id);
       fetchClasses();
-    } catch { toast.error("Error saving student"); }
+    } catch (err) { toast.error(err.response?.data?.error || "Error saving student"); }
     finally { setIsStudentLoading(false); }
   };
 
@@ -79,13 +79,17 @@ const Classes = () => {
 
   // --- EDIT STUDENT ---
   const startEditing = (std) => {
-    setEditingStudent({ id: std.id, full_name: std.full_name, student_code: std.student_code, student_password: std.student_password || '', class_id: std.class_id });
+    setEditingStudent({ id: std.id, full_name: std.full_name, student_code: std.student_code, student_password: std.student_password || '', student_id: std.student_id || '', class_id: std.class_id });
   };
 
   const cancelEditing = () => setEditingStudent(null);
 
   const saveEditing = async () => {
     if (!editingStudent) return;
+    if (!/^[0-9]{1,20}$/.test(editingStudent.student_id)) {
+      toast.error('ID faqat raqamlardan iborat bo‘lishi kerak (1–20 belgi)');
+      return;
+    }
     try {
       await api.put(`/admin/students/${editingStudent.id}`, editingStudent);
       toast.success("Student updated", { icon: '✨' });
@@ -97,7 +101,7 @@ const Classes = () => {
         fetchStudents(selectedClass.id);
       }
       fetchClasses();
-    } catch { toast.error("Error updating student"); }
+    } catch (err) { toast.error(err.response?.data?.error || "Error updating student"); }
   };
 
   // --- BULK TRANSFER ---
@@ -130,9 +134,9 @@ const Classes = () => {
   };
 
   const handleDownloadSample = () => {
-    const wsData = [["Full Name", "Class", "Login", "Password"], ["John Doe", "9-A", "1001", "sample-pass-1"], ["Jane Smith", "9-A", "1002", "sample-pass-2"], ["Bob Johnson", "10-B", "1003", "sample-pass-3"]];
+    const wsData = [["Full Name", "Class", "Login", "Password", "ID"], ["John Doe", "9-A", "1001", "sample-pass-1", "10001"], ["Jane Smith", "9-A", "1002", "sample-pass-2", "10002"], ["Bob Johnson", "10-B", "1003", "sample-pass-3", "10003"]];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = [{wch: 40}, {wch: 15}, {wch: 20}, {wch: 24}];
+    ws['!cols'] = [{wch: 40}, {wch: 15}, {wch: 20}, {wch: 24}, {wch: 20}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     XLSX.writeFile(wb, "Students_Sample.xlsx");
@@ -149,16 +153,16 @@ const Classes = () => {
       const json = XLSX.utils.sheet_to_json(worksheet, { raw: false });
       if (json.length === 0) { toast.error("File is empty"); return; }
       const studentsToImport = parseStudentImportRows(json);
-      if (studentsToImport.length === 0) { toast.error("Columns do not match (Full Name, Class, Login, Password)"); return; }
+      if (studentsToImport.length === 0) { toast.error("Columns do not match (Full Name, Class, Login, Password, ID)"); return; }
       toast.loading(`Importing ${studentsToImport.length} students...`);
       await api.post('/admin/students/import', { students: studentsToImport });
       toast.dismiss(); toast.success("Import successful!");
       fetchClasses(); if (selectedClass) fetchStudents(selectedClass.id);
-    } catch { toast.dismiss(); toast.error("Error importing file"); }
+    } catch (err) { toast.dismiss(); toast.error(err.response?.data?.error || err.message || "Error importing file"); }
     finally { setIsImporting(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
 
-  // Update logins via Excel (matches student_id -> updates student_code)
+  // Update both external credentials by the permanent student ID.
   const handleUpdateLogins = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -167,24 +171,19 @@ const Classes = () => {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(worksheet);
+      const json = XLSX.utils.sheet_to_json(worksheet, { raw: false });
       if (json.length === 0) { toast.error("File is empty"); return; }
-      const entries = json.map(row => {
-        const keys = Object.keys(row);
-        const idKey = keys.find(k => k.toLowerCase().includes('id') && !k.toLowerCase().includes('login'));
-        const loginKey = keys.find(k => k.toLowerCase().includes('login') || k.toLowerCase().includes('code') || k.toLowerCase().includes('kod'));
-        return { student_id: row[idKey || keys[0]]?.toString().trim(), student_code: row[loginKey || keys[1]]?.toString().trim() };
-      }).filter(e => e.student_id && e.student_code);
-      if (entries.length === 0) { toast.error("Columns not recognized (need ID + Login columns)"); return; }
+      const entries = parseCredentialUpdateRows(json);
+      if (entries.length === 0) { toast.error("ID, Login va Password ustunlari kerak"); return; }
       toast.loading(`Updating ${entries.length} logins...`);
       const res = await api.post('/admin/students/update-logins', { entries });
       toast.dismiss();
-      toast.success(`${res.data.updated} logins updated!`);
+      toast.success(`${res.data.updated} logins and passwords updated!`);
       if (res.data.notFound > 0) {
         toast(`${res.data.notFound} IDs not found in database`, { icon: '⚠️' });
       }
       if (selectedClass) fetchStudents(selectedClass.id);
-    } catch (err) { toast.dismiss(); toast.error(err.response?.data?.error || "Error updating logins"); }
+    } catch (err) { toast.dismiss(); toast.error(err.response?.data?.error || err.message || "Error updating logins and passwords"); }
     finally { setIsUpdatingLogins(false); if (loginFileRef.current) loginFileRef.current.value = ''; }
   };
 
@@ -216,8 +215,8 @@ const Classes = () => {
                 <Info className="w-3.5 h-3.5 opacity-60" />
               </button>
               <div className="absolute top-full right-0 mt-2 w-64 bg-slate-900 text-white text-xs rounded-xl p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none z-50 shadow-xl">
-                <p className="font-bold mb-1">📋 Update Logins via Excel</p>
-                <p className="text-slate-300 leading-relaxed">Upload an Excel file with <strong>ID</strong> and <strong>Login</strong> columns. The system will match students by their permanent ID and update their login codes for the new quarter.</p>
+                <p className="font-bold mb-1">Update logins and passwords</p>
+                <p className="text-slate-300 leading-relaxed">Upload an Excel file with <strong>ID</strong>, <strong>Login</strong> and <strong>Password</strong> columns. Students are matched by their permanent numeric ID. Both login and password are updated.</p>
                 <div className="absolute top-0 right-6 -translate-y-1/2 w-2.5 h-2.5 bg-slate-900 rotate-45"></div>
               </div>
             </div>
@@ -331,7 +330,7 @@ const Classes = () => {
                         </button>
                       )}
                       <form onSubmit={handleStudentSubmit} className="flex flex-wrap gap-2">
-                        <input type="text" required placeholder="ID" className="w-20 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_id} onChange={e => setStudentForm({...studentForm, student_id: e.target.value})} />
+                        <input type="text" required inputMode="numeric" pattern="[0-9]{1,20}" maxLength={20} aria-label="Student ID" title="ID: 1–20 digits" placeholder="ID" className="w-24 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_id} onChange={e => setStudentForm({...studentForm, student_id: e.target.value})} />
                         <input type="text" required placeholder="Full Name" className="w-36 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.full_name} onChange={e => setStudentForm({...studentForm, full_name: e.target.value})} />
                         <input type="text" required placeholder="Login" className="w-20 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_code} onChange={e => setStudentForm({...studentForm, student_code: e.target.value})} />
                         <input type="text" required aria-label="Student password" placeholder="Password" autoComplete="off" className="w-32 px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm outline-none transition-all font-medium" value={studentForm.student_password} onChange={e => setStudentForm({...studentForm, student_password: e.target.value})} />
@@ -422,7 +421,9 @@ const Classes = () => {
                               )}
                             </td>
                             <td className="px-4 py-3">
-                              {std.student_id ? (
+                              {isEditing ? (
+                                <input type="text" aria-label="Student ID" inputMode="numeric" pattern="[0-9]{1,20}" maxLength={20} className="w-full min-w-[90px] px-2 py-1.5 border border-indigo-200 rounded-lg text-xs font-mono" value={editingStudent.student_id} onChange={e => setEditingStudent({...editingStudent, student_id: e.target.value})} />
+                              ) : std.student_id ? (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 font-mono border border-amber-200">{std.student_id}</span>
                               ) : (
                                 <span className="text-xs text-slate-300 italic">—</span>

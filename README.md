@@ -104,9 +104,11 @@ Bu rejimda frontend va API http://localhost:5000 da ishlaydi.
 
 ### O'quvchi login va parollari
 
-`Classes & Students` sahifasida qo'lda qo'shish va tahrirlashda `Login` hamda `Password` maydonlari bor. `Sample` Excel fayli `Full Name`, `Class`, `Login`, `Password` ustunlarini beradi. Oldingi `Code` nomli ustun va kichik harfli `password` ham importda qo'llanadi. Parollar aynan berilgan matn sifatida saqlanadi; ular tashqi imtihon platformasiga tegishli, ExamGrid hisobiga kirish uchun ishlatilmaydi.
+`Classes & Students` sahifasida qo'lda qo'shish va tahrirlashda `ID`, `Login` hamda `Password` maydonlari bor. `Sample` Excel fayli `Full Name`, `Class`, `Login`, `Password`, `ID` ustunlarini beradi. Doimiy ID noyob va faqat 1–20 ta raqamdan iborat; Excel'da Text formatidan foydalaning, boshidagi nollar saqlanadi. Oldingi `Code` nomli ustun va kichik harfli `password` ham importda qo'llanadi. Eski, ID ustunisiz fayllar ham ishlaydi, lekin u o'quvchilarga doimiy ID biriktirilmaguncha ID orqali login/parol yangilanmaydi. Parollar aynan berilgan matn sifatida saqlanadi; ular tashqi imtihon platformasiga tegishli, ExamGrid hisobiga kirish uchun ishlatilmaydi.
 
-Login va parollar autentifikatsiyalangan superadmin/nazoratchi uchun ko'rinadi; nazoratchi ularni o'zgartira olmaydi. Ommaviy API va sahifalar bu ma'lumotlarni qaytarmaydi. Mavjud loginni qayta import qilishda faqat berilgan parol yangilanadi; ism va sinf o'zgarmaydi. Parol ustuni yo'q yoki bo'sh bo'lsa, avvalgi parol saqlanadi.
+Login va parollar autentifikatsiyalangan superadmin/nazoratchi uchun ko'rinadi; nazoratchi ularni o'zgartira olmaydi. Ommaviy API va sahifalar bu ma'lumotlarni qaytarmaydi. Mavjud loginni qayta import qilishda berilgan parol va ID yangilanadi; ism va sinf o'zgarmaydi. Parol yoki ID ustuni bo'lmasa, avvalgi qiymat saqlanadi.
+
+**Update Logins** uchun Excel faylida `ID`, `Login`, `Password` ustunlarining hammasi bo'lishi kerak (to'liq 5 ustunli import fayli ham mos). Har bir qatordagi doimiy ID bo'yicha login va parol birgalikda yangilanadi. ID o'zgarmaydi. Topilmagan ID'lar soni ko'rsatiladi. Takroriy ID yoki login, raqam bo'lmagan ID, bo'sh login/parol qabul qilinmaydi. Xatolik bo'lsa, shu fayl bo'yicha barcha o'zgarishlar qaytariladi.
 
 Mavjud bazani yangi versiyaga tayyorlash uchun deploydan oldin quyidagini bajaring. Bu buyruq admin parolini o'zgartirmaydi va o'quvchilarni o'chirmaydi:
 
